@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root { --navy:#123c5a; --blue:#176b87; --green:#16845b; --orange:#b86510; --bg:#f3f7fa; --text:#173042; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Arial,sans-serif; background:var(--bg); color:var(--text); }
+    header { background:linear-gradient(135deg,var(--navy),var(--blue)); color:white; padding:25px 18px 30px; text-align:center; }
+    .logo { width:58px;height:58px;border-radius:18px;background:#ffffff20;display:grid;place-items:center;margin:0 auto 10px;font-size:28px; }
+    header h1 { margin:0 0 6px;font-size:25px;letter-spacing:1px; }
+    header p { margin:0;font-size:14px;opacity:.92; }
+    main { max-width:650px;margin:-15px auto 30px;padding:0 14px; }
+    .card { background:white;border-radius:18px;padding:20px;margin-bottom:14px;box-shadow:0 5px 20px #14384a12; }
+    h2 { font-size:18px;margin:0 0 15px; }
+    label { display:block;font-size:13px;font-weight:bold;margin:13px 0 6px; }
+    input,select,textarea { width:100%;padding:12px;border:1px solid #cfdae1;border-radius:10px;font:inherit;background:white; }
+    textarea { min-height:75px;resize:vertical; }
+    .types { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
+    .choice { border:1.5px solid #d6e1e7;border-radius:13px;padding:15px 10px;text-align:center;cursor:pointer;font-weight:bold;background:white; }
+    .choice.active { border-color:var(--blue);background:#eaf6fa;color:var(--navy); }
+    .choice span { display:block;font-size:25px;margin-bottom:6px; }
+    .secondary { background:#eaf0f4;color:var(--navy);border:0;border-radius:10px;padding:11px 14px;font-weight:bold;cursor:pointer; }
+    .primary { width:100%;border:0;border-radius:12px;padding:15px;background:var(--green);color:white;font-size:16px;font-weight:bold;cursor:pointer;margin-top:14px; }
+    .primary:disabled { opacity:.55;cursor:wait; }
+    .camera { width:100%;max-height:320px;object-fit:cover;border-radius:12px;background:#e5edf1;display:block;margin-top:10px; }
+    .status { border-radius:10px;padding:12px;font-size:13px;background:#edf4f7;margin-top:10px;overflow-wrap:anywhere; }
+    .hidden { display:none!important; }
+    .small { font-size:12px;color:#607786;line-height:1.5; }
+    .result { font-weight:bold;line-height:1.5; }
+    footer { text-align:center;color:#6b7f8b;font-size:12px;padding:0 15px 25px; }
+    @media(max-width:420px){ .card{padding:16px;} header h1{font-size:22px;} }
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo">✓</div>
+  <h1>ABSENKU</h1>
+  <p>Puskesmas Wulandoni · Absensi Pegawai Digital</p>
+</header>
+<main>
+  <section class="card">
+    <h2>1. Pilih jenis absensi</h2>
+    <div class="types">
+      <button class="choice active" id="entryBtn" type="button" onclick="setType('Absen Masuk')"><span>🌅</span>ABSEN MASUK</button>
+      <button class="choice" id="exitBtn" type="button" onclick="setType('Absen Pulang')"><span>🌇</span>ABSEN PULANG</button>
+    </div>
+    <label for="name">Nama pegawai *</label>
+    <input id="name" placeholder="Masukkan nama lengkap" autocomplete="name">
+    <label for="nip">NIP (jika ada)</label>
+    <input id="nip" placeholder="Masukkan NIP bila tersedia">
+  </section>
+
+  <section class="card">
+    <h2>2. Pilih lokasi kegiatan</h2>
+    <label for="locationType">Lokasi absensi *</label>
+    <select id="locationType" onchange="locationChanged()">
+      <option value="">-- Pilih lokasi --</option>
+      <option value="Dalam Gedung">Dalam Gedung (GPS + selfie)</option>
+      <option value="Luar Gedung">Luar Gedung (foto kegiatan)</option>
+    </select>
+    <div id="gpsArea" class="hidden">
+      <button type="button" class="secondary" onclick="getGPS()">📍 Ambil lokasi GPS</button>
+      <div id="gpsStatus" class="status">Lokasi belum diambil.</div>
+    </div>
+    <div id="notesArea" class="hidden">
+      <label for="notes">Keterangan kegiatan luar gedung *</label>
+      <textarea id="notes" placeholder="Contoh: Posyandu, kunjungan rumah, rapat lintas sektor..."></textarea>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>3. Ambil foto</h2>
+    <p class="small">Dalam gedung: foto selfie langsung. Luar gedung: foto kegiatan. Izinkan akses kamera saat browser meminta izin.</p>
+    <button type="button" class="secondary" onclick="startCamera()">📷 Aktifkan kamera</button>
+    <div id="cameraStatus" class="status">Kamera belum diaktifkan.</div>
+    <video id="video" class="camera hidden" autoplay playsinline muted></video>
+    <canvas id="canvas" class="hidden"></canvas>
+    <img id="preview" class="camera hidden" alt="Pratinjau foto absensi">
+    <button id="takePhoto" type="button" class="secondary hidden" style="margin-top:10px" onclick="capturePhoto()">Ambil foto</button>
+    <button id="retakePhoto" type="button" class="secondary hidden" style="margin-top:10px" onclick="retake()">Ulangi foto</button>
+  </section>
+
+  <section class="card">
+    <h2>4. Kirim absensi</h2>
+    <p class="small">Pastikan nama, jenis absen, lokasi, dan foto sudah benar. Data yang berhasil dikirim akan masuk ke Google Spreadsheet.</p>
+    <button id="submitBtn" class="primary" type="button" onclick="submitForm()">KIRIM ABSENSI</button>
+    <div id="result" class="status hidden" role="status"></div>
+  </section>
+</main>
+<footer>ABSENKU · Puskesmas Wulandoni</footer>
+
+<script>
+  let attendanceType = 'Absen Masuk';
+  let stream = null;
+  let photoData = '';
+  let gps = null;
+
+  function setType(type) {
+    attendanceType = type;
+    document.getElementById('entryBtn').classList.toggle('active', type === 'Absen Masuk');
+    document.getElementById('exitBtn').classList.toggle('active', type === 'Absen Pulang');
+  }
+
+  function locationChanged() {
+    const type = document.getElementById('locationType').value;
+    document.getElementById('gpsArea').classList.toggle('hidden', type !== 'Dalam Gedung');
+    document.getElementById('notesArea').classList.toggle('hidden', type !== 'Luar Gedung');
+    gps = null;
+    document.getElementById('gpsStatus').textContent = 'Lokasi belum diambil.';
+  }
+
+  async function startCamera() {
+    const status = document.getElementById('cameraStatus');
+    const video = document.getElementById('video');
+    status.textContent = 'Meminta akses kamera...';
+    if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      status.textContent = 'Kamera hanya dapat dibuka dari URL Web App resmi yang berawalan https://script.google.com/.../exec. Jangan buka file HTML langsung dari laptop.';
+      return;
+    }
+    stopCamera();
+    try {
+      // Coba kamera depan terlebih dahulu; jika perangkat tidak mendukung
+      // facingMode, ulangi dengan kamera default.
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'user' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false
+        });
+      } catch (firstError) {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
+      video.srcObject = stream;
+      video.classList.remove('hidden');
+      document.getElementById('preview').classList.add('hidden');
+      document.getElementById('takePhoto').classList.remove('hidden');
+      await video.play();
+      status.textContent = 'Kamera aktif. Posisikan wajah atau objek kegiatan, lalu tekan Ambil foto.';
+    } catch (err) {
+      stopCamera();
+      let hint = 'Periksa izin kamera pada ikon gembok di bilah alamat, pilih Izinkan, lalu muat ulang halaman.';
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        hint = 'Akses ditolak. Buka ikon gembok di bilah alamat > Kamera > Izinkan, lalu muat ulang halaman.';
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        hint = 'Tidak ada kamera terdeteksi. Periksa aplikasi Camera Windows dan driver kamera.';
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        hint = 'Kamera sedang dipakai aplikasi lain atau gagal dibuka. Tutup Camera, Zoom, Teams, dan aplikasi kamera lain, lalu coba lagi.';
+      } else if (err.name === 'SecurityError') {
+        hint = 'Halaman tidak aman. Gunakan URL Web App HTTPS yang berakhir /exec.';
+      }
+      status.textContent = 'Kamera gagal dibuka (' + (err.name || 'Error') + '): ' + (err.message || 'tidak diketahui') + '. ' + hint;
+    }
+  }
+
+  function capturePhoto() {
+    const video = document.getElementById('video');
+    if (!video.videoWidth) {
+      document.getElementById('cameraStatus').textContent = 'Kamera belum siap. Tunggu sebentar lalu coba lagi.';
+      return;
+    }
+    const canvas = document.getElementById('canvas');
+    const maxWidth = 1000;
+    const scale = Math.min(1, maxWidth / video.videoWidth);
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    photoData = canvas.toDataURL('image/jpeg', 0.78);
+    document.getElementById('preview').src = photoData;
+    document.getElementById('preview').classList.remove('hidden');
+    video.classList.add('hidden');
+    document.getElementById('takePhoto').classList.add('hidden');
+    document.getElementById('retakePhoto').classList.remove('hidden');
+    document.getElementById('cameraStatus').textContent = 'Foto siap dikirim.';
+    stopCamera();
+  }
+
+  function retake() {
+    photoData = '';
+    document.getElementById('preview').classList.add('hidden');
+    document.getElementById('retakePhoto').classList.add('hidden');
+    startCamera();
+  }
+
+  function stopCamera() {
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  }
+
+  function getGPS() {
+    const status = document.getElementById('gpsStatus');
+    if (!navigator.geolocation) { status.textContent = 'Browser tidak mendukung GPS.'; return; }
+    status.textContent = 'Mengambil lokasi GPS...';
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        gps = {latitude:pos.coords.latitude, longitude:pos.coords.longitude, accuracy:pos.coords.accuracy};
+        status.textContent = 'Lokasi didapat. Akurasi sekitar ' + Math.round(gps.accuracy) + ' meter.';
+      },
+      err => {
+        status.textContent = 'GPS gagal: ' + err.message + '. Aktifkan Location pada laptop dan izinkan lokasi untuk Chrome.';
+      },
+      {enableHighAccuracy:true, timeout:20000, maximumAge:0}
+    );
+  }
+
+  function submitForm() {
+    const name = document.getElementById('name').value.trim();
+    const nip = document.getElementById('nip').value.trim();
+    const locationType = document.getElementById('locationType').value;
+    const notes = document.getElementById('notes').value.trim();
+    const result = document.getElementById('result');
+    const btn = document.getElementById('submitBtn');
+
+    if (!name) return showResult('Nama pegawai wajib diisi.', true);
+    if (!locationType) return showResult('Pilih Dalam Gedung atau Luar Gedung.', true);
+    if (locationType === 'Dalam Gedung' && !gps) return showResult('Ambil lokasi GPS terlebih dahulu.', true);
+    if (locationType === 'Luar Gedung' && !notes) return showResult('Isi keterangan kegiatan luar gedung.', true);
+    if (!photoData) return showResult('Ambil foto terlebih dahulu.', true);
+
+    const payload = {
+      name, nip, type:attendanceType, locationType, notes, photoData,
+      latitude:gps ? gps.latitude : '',
+      longitude:gps ? gps.longitude : '',
+      accuracy:gps ? gps.accuracy : ''
+    };
+    btn.disabled = true;
+    btn.textContent = 'MENGIRIM...';
+    showResult('Sedang menyimpan absensi...', false);
+
+    google.script.run
+      .withSuccessHandler(res => {
+        showResult(res.message, false);
+        btn.disabled = false;
+        btn.textContent = 'KIRIM ABSENSI';
+        photoData = '';
+        gps = null;
+        document.getElementById('preview').classList.add('hidden');
+        document.getElementById('retakePhoto').classList.add('hidden');
+        document.getElementById('gpsStatus').textContent = 'Lokasi belum diambil.';
+        document.getElementById('notes').value = '';
+      })
+      .withFailureHandler(err => {
+        showResult(err && err.message ? err.message : 'Terjadi kesalahan saat menyimpan.', true);
+        btn.disabled = false;
+        btn.textContent = 'KIRIM ABSENSI';
+      })
+      .submitAttendance(payload);
+  }
+
+  function showResult(message, isError) {
+    const el = document.getElementById('result');
+    el.textContent = message;
+    el.classList.remove('hidden');
+    el.style.background = isError ? '#fff0ee' : '#e9f7ef';
+    el.style.color = isError ? '#9b2c20' : '#17613f';
+  }
+
+  window.addEventListener('beforeunload', stopCamera);
+</script>
+</body>
+</html>
